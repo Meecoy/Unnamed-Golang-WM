@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
+
 	"github.com/BurntSushi/xgb/xproto"
 	"github.com/BurntSushi/xgbutil/ewmh"
 	"github.com/BurntSushi/xgbutil/icccm"
 	"github.com/BurntSushi/xgbutil/xevent"
-	"log"
 )
 
 func (wm *WM) initTitleFont() error {
@@ -17,7 +18,9 @@ func (wm *WM) initTitleFont() error {
 		return err
 	}
 
-	if err := xproto.OpenFontChecked(conn, font, uint16(len("fixed")), "fixed").Check(); err != nil {
+	if err := xproto.OpenFontChecked(
+		conn, font, uint16(len("fixed")), "fixed",
+	).Check(); err != nil {
 		return err
 	}
 
@@ -28,9 +31,19 @@ func (wm *WM) initTitleFont() error {
 		return err
 	}
 
+	if err := xproto.CreateGCChecked(
+		conn,
+		gc,
+		xproto.Drawable(wm.X.RootWin()),
+		xproto.GcForeground|xproto.GcBackground|xproto.GcFont,
+		[]uint32{TitleFG, TitleBG, uint32(font)},
+	).Check(); err != nil {
+		return err
+	}
+
 	wm.gc = gc
 
-	return xproto.CreateGCChecked(conn, gc, xproto.Drawable(wm.X.RootWin()), xproto.GcForeground|xproto.GcBackground|xproto.GcFont, []uint32{TitleFG, TitleBG, uint32(font)}).Check()
+	return nil
 }
 
 func (wm *WM) closeTitleFont() {
@@ -73,34 +86,134 @@ func (wm *WM) manage(id xproto.Window) error {
 		return xproto.MapWindowChecked(conn, id).Check()
 	}
 
-	geom, err := xproto.GetGeometry(conn, xproto.Drawable(id)).Reply()
+	geom, err := xproto.GetGeometry(
+		conn,
+		xproto.Drawable(id),
+	).Reply()
 	if err != nil {
 		return err
 	}
+
+	screen := wm.X.Screen()
+
+	screenW := int32(screen.WidthInPixels)
+	screenH := int32(screen.HeightInPixels)
+
+	const margin int32 = 20
+	titleH := int32(TitleHeight)
+
+	width := int32(geom.Width)
+	height := int32(geom.Height)
+
+	log.Printf(
+		"Initial geometry: window=%d x=%d y=%d width=%d height=%d screen=%dx%d",
+		id,
+		geom.X,
+		geom.Y,
+		geom.Width,
+		geom.Height,
+		screenW,
+		screenH,
+	)
+
+	maxW := max(1, screenW-2*margin)
+	maxH := max(1, screenH-2*margin-titleH)
+
+	width = min(max(width, 1), maxW)
+	height = min(max(height, 1), maxH)
+
+	frameX := (screenW - width) / 2
+	frameY := (screenH - height - titleH) / 2
+
+	frameX = max(0, frameX)
+	frameY = max(0, frameY)
+
+	x := int16(frameX)
+	y := int16(frameY + titleH)
 
 	frame, err := xproto.NewWindowId(conn)
 	if err != nil {
 		return err
 	}
 
-	mask := uint32(xproto.CwBackPixmap | xproto.CwOverrideRedirect | xproto.CwEventMask)
-	events := uint32(xproto.EventMaskExposure | xproto.EventMaskSubstructureRedirect | xproto.EventMaskSubstructureNotify | xproto.EventMaskButtonPress)
-	err = xproto.CreateWindowChecked(conn, wm.X.Screen().RootDepth, frame, wm.X.RootWin(), geom.X, geom.Y-int16(TitleHeight), geom.Width, geom.Height+TitleHeight, 0, xproto.WindowClassInputOutput, wm.X.Screen().RootVisual, mask, []uint32{xproto.BackPixmapNone, 1, events}).Check()
+	mask := uint32(
+		xproto.CwBackPixmap |
+			xproto.CwBorderPixel|
+			xproto.CwOverrideRedirect |
+			xproto.CwEventMask,
+	)
+
+	events := uint32(
+		xproto.EventMaskExposure |
+			xproto.EventMaskSubstructureRedirect |
+			xproto.EventMaskSubstructureNotify |
+			xproto.EventMaskButtonPress,
+	)
+
+	err = xproto.CreateWindowChecked(
+		conn,
+		screen.RootDepth,
+		frame,
+		wm.X.RootWin(),
+		int16(frameX),
+		int16(frameY),
+		uint16(width),
+		uint16(height+titleH),
+		1,
+		xproto.WindowClassInputOutput,
+		screen.RootVisual,
+		mask,
+		[]uint32{
+			xproto.BackPixmapNone,
+			TitleBG,
+			1,
+			events,
+		},
+	).Check()
+
 	if err != nil {
 		return err
 	}
 
-	if err = xproto.ChangeSaveSetChecked(conn, xproto.SetModeInsert, id).Check(); err != nil {
+	if err = xproto.ChangeSaveSetChecked(
+		conn,
+		xproto.SetModeInsert,
+		id,
+	).Check(); err != nil {
 		xproto.DestroyWindow(conn, frame)
 		return err
 	}
 
-	if err = xproto.ConfigureWindowChecked(conn, id, xproto.ConfigWindowBorderWidth, []uint32{0}).Check(); err != nil {
+	if err = xproto.ConfigureWindowChecked(
+		conn,
+		id,
+		xproto.ConfigWindowBorderWidth,
+		[]uint32{0},
+	).Check(); err != nil {
 		xproto.DestroyWindow(conn, frame)
 		return err
 	}
 
-	if err = xproto.ReparentWindowChecked(conn, id, frame, 0, int16(TitleHeight)).Check(); err != nil {
+	if err = xproto.ReparentWindowChecked(
+		conn,
+		id,
+		frame,
+		0,
+		int16(TitleHeight),
+	).Check(); err != nil {
+		xproto.DestroyWindow(conn, frame)
+		return err
+	}
+
+	if err = xproto.ConfigureWindowChecked(
+		conn,
+		id,
+		xproto.ConfigWindowWidth|xproto.ConfigWindowHeight,
+		[]uint32{
+			uint32(width),
+			uint32(height),
+		},
+	).Check(); err != nil {
 		xproto.DestroyWindow(conn, frame)
 		return err
 	}
@@ -108,10 +221,10 @@ func (wm *WM) manage(id xproto.Window) error {
 	client := &Client{
 		ID:     id,
 		Frame:  frame,
-		X:      geom.X,
-		Y:      geom.Y,
-		Width:  geom.Width,
-		Height: geom.Height,
+		X:      x,
+		Y:      y,
+		Width:  uint16(width),
+		Height: uint16(height),
 		Title:  wm.getTitle(id),
 	}
 
@@ -122,6 +235,7 @@ func (wm *WM) manage(id xproto.Window) error {
 	xevent.ConfigureRequestFun(wm.onConfigureRequest).Connect(wm.X, frame)
 	xevent.ExposeFun(wm.onExpose).Connect(wm.X, frame)
 	xevent.ButtonPressFun(wm.onDragStart).Connect(wm.X, frame)
+
 	xevent.PropertyNotifyFun(wm.onPropertyNotify).Connect(wm.X, id)
 	xevent.DestroyNotifyFun(wm.onDestroyNotify).Connect(wm.X, id)
 	xevent.UnmapNotifyFun(wm.onUnmapNotify).Connect(wm.X, id)
@@ -140,6 +254,7 @@ func (wm *WM) manage(id xproto.Window) error {
 		wm.unmanage(client, true)
 		return err
 	}
+
 	if err = xproto.MapWindowChecked(conn, id).Check(); err != nil {
 		return err
 	}
@@ -150,20 +265,25 @@ func (wm *WM) manage(id xproto.Window) error {
 
 	wm.drawTitle(client)
 
-	log.Printf("Managed window %d (%q)", id, client.Title)
+	log.Printf(
+		"Managed window %d (%q) at (%d, %d), size %dx%d",
+		id,
+		client.Title,
+		client.X,
+		client.Y,
+		client.Width,
+		client.Height,
+	)
 
 	return nil
 }
 
 func (wm *WM) unmanage(client *Client, restore bool) {
 	conn := wm.X.Conn()
-	
+
 	if wm.drag != nil && wm.drag.Client == client {
 		wm.drag = nil
-		xproto.UngrabPointer(
-			conn,
-			xproto.TimeCurrentTime,
-		)
+		xproto.UngrabPointer(conn, xproto.TimeCurrentTime)
 	}
 
 	delete(wm.Clients, client.ID)
@@ -171,7 +291,7 @@ func (wm *WM) unmanage(client *Client, restore bool) {
 
 	xevent.Detach(wm.X, client.ID)
 	xevent.Detach(wm.X, client.Frame)
-	
+
 	if restore {
 		if err := xproto.ReparentWindowChecked(
 			conn,
@@ -180,9 +300,13 @@ func (wm *WM) unmanage(client *Client, restore bool) {
 			client.X,
 			client.Y,
 		).Check(); err != nil {
-			log.Printf("Cannot restore window %d: %v", client.ID, err)
+			log.Printf(
+				"Cannot restore window %d: %v",
+				client.ID,
+				err,
+			)
 		}
-		
+
 		xproto.ChangeSaveSet(
 			conn,
 			xproto.SetModeDelete,
@@ -190,11 +314,16 @@ func (wm *WM) unmanage(client *Client, restore bool) {
 		)
 	}
 
-	if err := xproto.DestroyWindowChecked(conn, client.Frame).Check(); err != nil{
-		log.Printf("Couldn't destroy frame: %#v", err)
+	if err := xproto.DestroyWindowChecked(
+		conn,
+		client.Frame,
+	).Check(); err != nil {
+		log.Printf(
+			"Cannot destroy frame %d: %v",
+			client.Frame,
+			err,
+		)
 	}
-
-	log.Printf("Unmanaged window %d", client.ID)
 }
 
 func (wm *WM) drawTitle(client *Client) {
@@ -235,7 +364,7 @@ func (wm *WM) drawTitle(client *Client) {
 			break
 		}
 
-		if r > 31 && r < 256 {
+		if r >= 32 && r <= 255 {
 			text = append(text, byte(r))
 		} else {
 			text = append(text, '?')
@@ -246,15 +375,21 @@ func (wm *WM) drawTitle(client *Client) {
 		return
 	}
 
-	if err := xproto.ImageText8(
+	textY := int16(TitleHeight) - 4
+
+	if err := xproto.ImageText8Checked(
 		conn,
 		byte(len(text)),
 		xproto.Drawable(client.Frame),
 		wm.gc,
-		int16(9),
-		int16(12),
+		9,
+		textY,
 		string(text),
 	).Check(); err != nil {
-		log.Printf("Couldn't draw %d title: %#v", client.Frame, err)
+		log.Printf(
+			"Cannot draw title for window %d: %v",
+			client.ID,
+			err,
+		)
 	}
 }
