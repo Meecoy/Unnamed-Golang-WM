@@ -11,6 +11,7 @@ func (wm *WM) onMapRequest(X *xgbutil.XUtil, ev xevent.MapRequestEvent) {
 	if client, ok := wm.Clients[ev.Window]; ok {
 		xproto.MapWindow(X.Conn(), client.ID)
 		xproto.MapWindow(X.Conn(), client.Frame)
+		wm.focusClient(client, xproto.TimeCurrentTime)
 		return
 	}
 

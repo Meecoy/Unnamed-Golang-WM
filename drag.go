@@ -32,6 +32,8 @@ func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent) {
 		return
 	}
 
+	wm.focusClient(client, ev.Time)
+
 	reply, err := xproto.GrabPointer(
 		X.Conn(),
 		false,

@@ -237,6 +237,7 @@ func (wm *WM) manage(id xproto.Window) error {
 	xevent.ButtonPressFun(wm.onDragStart).Connect(wm.X, frame)
 
 	xevent.PropertyNotifyFun(wm.onPropertyNotify).Connect(wm.X, id)
+	xevent.EnterNotifyFun(wm.onClientEnter).Connect(wm.X, id)
 	xevent.DestroyNotifyFun(wm.onDestroyNotify).Connect(wm.X, id)
 	xevent.UnmapNotifyFun(wm.onUnmapNotify).Connect(wm.X, id)
 
@@ -247,7 +248,8 @@ func (wm *WM) manage(id xproto.Window) error {
 		[]uint32{
 			uint32(
 				xproto.EventMaskStructureNotify |
-					xproto.EventMaskPropertyChange,
+					xproto.EventMaskPropertyChange|
+					xproto.EventMaskEnterWindow,
 			),
 		},
 	).Check(); err != nil {
@@ -263,6 +265,7 @@ func (wm *WM) manage(id xproto.Window) error {
 		return err
 	}
 
+	wm.focusClient(client, xproto.TimeCurrentTime)
 	wm.drawTitle(client)
 
 	log.Printf(
