@@ -18,8 +18,6 @@ func main() {
 		log.Fatalf("Couldn't establish window manager ownership (%#v), quitting...", err)
 	}
 
-	// TODO Base root window depending on xcursor values
-
 	if err := setRootCursor(X, xcursor.LeftPtr); err != nil {
 		log.Printf("Couldn't set root cursor: %#v", err)
 	}

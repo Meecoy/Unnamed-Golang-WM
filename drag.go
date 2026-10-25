@@ -1,14 +1,14 @@
 package main
 
-import(
-	"log"
-	"github.com/BurntSushi/xgbutil"
-	"github.com/BurntSushi/xgbutil/xevent"
-	"github.com/BurntSushi/xgbutil/xcursor"
+import (
 	"github.com/BurntSushi/xgb/xproto"
+	"github.com/BurntSushi/xgbutil"
+	"github.com/BurntSushi/xgbutil/xcursor"
+	"github.com/BurntSushi/xgbutil/xevent"
+	"log"
 )
 
-type DragState struct{
+type DragState struct {
 	Client *Client
 
 	StartMouseX int16
@@ -18,8 +18,8 @@ type DragState struct{
 	StartY int16
 }
 
-func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent){
-	if ev.Detail != xproto.ButtonIndex1{
+func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent) {
+	if ev.Detail != xproto.ButtonIndex1 {
 		return
 	}
 
@@ -28,7 +28,7 @@ func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent){
 	}
 
 	client := wm.ByFrame[ev.Event]
-	if client == nil || wm.drag != nil{
+	if client == nil || wm.drag != nil {
 		return
 	}
 
@@ -36,7 +36,7 @@ func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent){
 		X.Conn(),
 		false,
 		X.RootWin(),
-		xproto.EventMaskPointerMotion | xproto.EventMaskButtonRelease,
+		xproto.EventMaskPointerMotion|xproto.EventMaskButtonRelease,
 		xproto.GrabModeAsync,
 		xproto.GrabModeAsync,
 		xproto.WindowNone,
@@ -45,7 +45,7 @@ func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent){
 	).Reply()
 
 	setRootCursor(X, xcursor.Fleur)
-	
+
 	if err != nil {
 		log.Printf("Couldn't grab pointer: %#v", err)
 		return
@@ -57,15 +57,15 @@ func (wm *WM) onDragStart(X *xgbutil.XUtil, ev xevent.ButtonPressEvent){
 	}
 
 	wm.drag = &DragState{
-		Client: client,
+		Client:      client,
 		StartMouseX: ev.RootX,
 		StartMouseY: ev.RootY,
-		StartX: client.X,
-		StartY: client.Y,
+		StartX:      client.X,
+		StartY:      client.Y,
 	}
 }
 
-func (wm *WM) onDragMotion(X *xgbutil.XUtil, ev xevent.MotionNotifyEvent){
+func (wm *WM) onDragMotion(X *xgbutil.XUtil, ev xevent.MotionNotifyEvent) {
 	if wm.drag == nil {
 		return
 	}
@@ -78,7 +78,7 @@ func (wm *WM) onDragMotion(X *xgbutil.XUtil, ev xevent.MotionNotifyEvent){
 	newX := int16(int32(drag.StartX) + dx)
 	newY := int16(int32(drag.StartY) + dy)
 
-	xproto.ConfigureWindow(X.Conn(), drag.Client.Frame, xproto.ConfigWindowX | xproto.ConfigWindowY, []uint32{
+	xproto.ConfigureWindow(X.Conn(), drag.Client.Frame, xproto.ConfigWindowX|xproto.ConfigWindowY, []uint32{
 		uint32(newX), uint32(newY - int16(TitleHeight)),
 	},
 	)
@@ -87,8 +87,8 @@ func (wm *WM) onDragMotion(X *xgbutil.XUtil, ev xevent.MotionNotifyEvent){
 	drag.Client.Y = newY
 }
 
-func (wm *WM) onDragEnd(X *xgbutil.XUtil, ev xevent.ButtonReleaseEvent){
-	if wm.drag == nil || ev.Detail != xproto.ButtonIndex1{
+func (wm *WM) onDragEnd(X *xgbutil.XUtil, ev xevent.ButtonReleaseEvent) {
+	if wm.drag == nil || ev.Detail != xproto.ButtonIndex1 {
 		return
 	}
 

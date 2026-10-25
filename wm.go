@@ -26,11 +26,11 @@ type WM struct {
 }
 
 type Client struct {
-	ID xproto.Window
-	Frame xproto.Window
-	X,Y int16
+	ID            xproto.Window
+	Frame         xproto.Window
+	X, Y          int16
 	Width, Height uint16
-	Title string
+	Title         string
 }
 
 func NewWM(X *xgbutil.XUtil) *WM {
@@ -42,7 +42,7 @@ func NewWM(X *xgbutil.XUtil) *WM {
 }
 
 func (wm *WM) Run() error {
-	if err := wm.initTitleFont(); err != nil{
+	if err := wm.initTitleFont(); err != nil {
 		return err
 	}
 	defer wm.closeTitleFont()
@@ -50,11 +50,11 @@ func (wm *WM) Run() error {
 	var err error
 
 	wm.wmName, err = xprop.Atm(wm.X, "WM_NAME")
-	if err != nil{
+	if err != nil {
 		return err
 	}
 	wm.netWmName, err = xprop.Atm(wm.X, "_NET_WM_NAME")
-	if err != nil{
+	if err != nil {
 		return err
 	}
 
@@ -68,10 +68,12 @@ func (wm *WM) Run() error {
 	if err := xwindow.New(wm.X, root).Listen(
 		xproto.EventMaskSubstructureRedirect |
 			xproto.EventMaskSubstructureNotify,
-	); err != nil{
+	); err != nil {
 		return err
 	}
-
+	if err := wm.initKeybinds(); err != nil {
+		return err
+	}
 	xevent.Main(wm.X)
 	return nil
 }
