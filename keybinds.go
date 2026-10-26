@@ -17,19 +17,9 @@ type Keybind struct {
 func (wm *WM) initKeybinds() error {
 	keybind.Initialize(wm.X)
 
-	bindings := []Keybind{
-		{
-			Key: "Mod4-Return",
-			Action: func(){
-				wm.spawn("kitty", "-o", "linux_display_server=x11")
-			},
-		},
-		{
-			Key: "Mod4-Shift-Return",
-			Action: func(){
-				wm.spawn("xterm")
-			},
-		},
+	bindings, err := wm.parseKeybinds()
+	if err != nil{
+		return err
 	}
 
 	for _, binding := range bindings {
